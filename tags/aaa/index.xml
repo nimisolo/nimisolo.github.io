@@ -2,7 +2,6 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Aaa on Are you kidding?</title>
-<<<<<<< HEAD
     <link>https://nimisolo.github.io/tags/aaa/index.xml</link>
     <description>Recent content in Aaa on Are you kidding?</description>
     <generator>Hugo -- gohugo.io</generator>
@@ -15,20 +14,6 @@
       <pubDate>Sun, 05 Feb 2017 14:57:41 +0800</pubDate>
       
       <guid>https://nimisolo.github.io/post/dummy/</guid>
-=======
-    <link>http://example.org/tags/aaa/index.xml</link>
-    <description>Recent content in Aaa on Are you kidding?</description>
-    <generator>Hugo -- gohugo.io</generator>
-    <language>en-us</language>
-    <atom:link href="http://example.org/tags/aaa/index.xml" rel="self" type="application/rss+xml" />
-    
-    <item>
-      <title>dummy</title>
-      <link>http://example.org/post/dummy/</link>
-      <pubDate>Sun, 05 Feb 2017 14:57:41 +0800</pubDate>
-      
-      <guid>http://example.org/post/dummy/</guid>
->>>>>>> 924adf5f49d2b95ae25bc9b403902744547e0985
       <description>
 
 &lt;h1 id=&#34;dummy&#34;&gt;Dummy&lt;/h1&gt;
