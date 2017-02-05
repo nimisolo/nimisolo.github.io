@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
+  
+  <url>
+    <loc>https://nimisolo.github.io/post/dummy/</loc>
+    <lastmod>2017-02-05T14:57:41+08:00</lastmod>
+  </url>
+  
+  <url>
+    <loc>https://nimisolo.github.io/tags/aaa/</loc>
+    <lastmod>2017-02-05T14:57:41+08:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>https://nimisolo.github.io/</loc>
+    <lastmod>2017-02-05T14:57:41+08:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>https://nimisolo.github.io/tags/bbb/</loc>
+    <lastmod>2017-02-05T14:57:41+08:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>https://nimisolo.github.io/post/</loc>
+    <lastmod>2017-02-05T14:57:41+08:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>https://nimisolo.github.io/tags/</loc>
+    <priority>0</priority>
+  </url>
+  
+</urlset>
