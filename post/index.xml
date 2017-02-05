@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Posts on Are you kidding?</title>
+    <link>https://nimisolo.github.io/post/index.xml</link>
+    <description>Recent content in Posts on Are you kidding?</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <lastBuildDate>Sun, 05 Feb 2017 15:54:39 +0800</lastBuildDate>
+    <atom:link href="https://nimisolo.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>关于periodic-mode timer的问题</title>
+      <link>https://nimisolo.github.io/post/%E5%85%B3%E4%BA%8Eperiodic-mode/</link>
+      <pubDate>Sun, 05 Feb 2017 15:54:39 +0800</pubDate>
+      
+      <guid>https://nimisolo.github.io/post/%E5%85%B3%E4%BA%8Eperiodic-mode/</guid>
+      <description>&lt;p&gt;今天和晓建讨论一个方案时，他说“即使定时器是periodic mode，当加入hrtimer时也有可能会去设置硬件计数器（tmict/tsc_deadline）的值”。
+咦？！和我以前的认识不一样啊，根据以前的掌握：periodic mode情况下新加hrtimer时不会设置硬件计数器了，及时设置计数器是oneshot mode的做法啊！
+于是重新翻了下相关代码，证明&lt;strong&gt;&lt;font color=red&gt;晓建理解错了、我的观点是正确的&lt;/font&gt;&lt;/strong&gt;。请看下面分析。&lt;/p&gt;
+
+&lt;p&gt;我们以新加一个定时器的操作入手：&lt;code&gt;hrtimer_start --&amp;gt; hrtimer_start_range_ns
+&lt;/code&gt;，在后者中有这么一段：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;	leftmost = enqueue_hrtimer(timer, new_base);
+	if (!leftmost)
+		goto unlock;
+
+	if (!hrtimer_is_hres_active(timer)) {
+		/*
+		 * Kick to reschedule the next tick to handle the new timer
+		 * on dynticks target.
+		 */
+		if (new_base-&amp;gt;cpu_base-&amp;gt;nohz_active)
+			wake_up_nohz_cpu(new_base-&amp;gt;cpu_base-&amp;gt;cpu);
+	} else {
+		hrtimer_reprogram(timer, new_base);
+	}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;ol&gt;
+&lt;li&gt;通过&lt;code&gt;enqueue_hrtimer&lt;/code&gt;将（新添加的）hrtimer插入到当前的timerqueue（其实是一个rb-tree）中。如果该hrtimer是“将会最早到期”的，则它会放在rb-tree的最左端，即leftrmost为1；否则leftmost为0。&lt;/li&gt;
+&lt;li&gt;如果不是最左端，则直接返回。这是因为：此函数是perdioc mode和oneshot mode公用的，如果此定时器将最早到期，oneshot mode会根据起到期时间重设硬件计数器。&lt;/li&gt;
+&lt;li&gt;如果没有启动高精度定时器（&lt;code&gt;hrtimer_is_hres_active&lt;/code&gt;返回false），则不会重设硬件计数器；否则（oneshot mode）就通过&lt;code&gt;hrtimer_reprogram&lt;/code&gt;重设。&lt;/li&gt;
+&lt;/ol&gt;
+
+&lt;p&gt;现在需要弄清楚的就是：&lt;code&gt;hrtimer_is_hres_active&lt;/code&gt;什么情况下返回true。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;static inline int hrtimer_is_hres_active(struct hrtimer *timer)
+{
+	return timer-&amp;gt;base-&amp;gt;cpu_base-&amp;gt;hres_active;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;实际上就是看&lt;code&gt;hres_active&lt;/code&gt;是否为1。因此下面搜索下，看什么情况下会设置它为1。&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;static void hrtimer_switch_to_hres(void)
+{
+	struct hrtimer_cpu_base *base = this_cpu_ptr(&amp;amp;hrtimer_bases);
+
+	if (tick_init_highres()) {
+		printk(KERN_WARNING &amp;quot;Could not switch to high resolution &amp;quot;
+				    &amp;quot;mode on CPU %d\n&amp;quot;, base-&amp;gt;cpu);
+		return;
+	}
+	base-&amp;gt;hres_active = 1;
+	......
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;当&lt;code&gt;tick_init_highres&lt;/code&gt;返回false是，才会设置&lt;code&gt;hres_active&lt;/code&gt;为1。看名字，该函数的作用是初始化高精度定时器（即oneshot mode），深入该函数，可以发现：如果成功切换成oneshot，则会返回0。
+好，到这里其实我们已经弄清楚了：
+&lt;font color=red&gt;
++ 高精度highres其实是指onshot-mode。
++ periodic mode下，即使新加一个leftmost的hrtimer也不会重设硬件计数器。只有onshot mode下才会。
+&lt;/font&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;更进一步&lt;/strong&gt;，当hrtimer到期之后，是如何被处理的？
+&lt;strong&gt;对于periodic-mode模式：&lt;/strong&gt;&lt;code&gt;tick_handle_periodic --&amp;gt; tick_periodic --&amp;gt; update_process_times --&amp;gt; run_local_timers --&amp;gt; hrtimer_run_queues --&amp;gt; __hrtimer_run_queues&lt;/code&gt;
+&lt;strong&gt;对于oneshot-mode模式：&lt;/strong&gt;&lt;code&gt;hrtimer_interrupt --&amp;gt; __hrtimer_run_queues&lt;/code&gt;&lt;/p&gt;
+
+&lt;p&gt;处理超时的hrtimer是最终都是在&lt;strong&gt;&lt;code&gt;__hrtimer_run_queues&lt;/code&gt;&lt;/strong&gt;函数中完成，&lt;font color=red&gt;它会（根据当前时间）遍历所有已经超时的hrtimer，然后处理它们&lt;/font&gt;。&lt;/p&gt;
+
+&lt;p&gt;&lt;strong&gt;再进一步&lt;/strong&gt;，为啥periodic-mode精度比oneshot-mode低低低？？
++ 因为periodic-mode下时钟中断触发时间是周期性的，也就是说在一个周期内到期的hrtimer只有在周期结束（时钟终端触发）时才能获得处理，显然实时性较差；并且如果一个周期内很多hrtimer到期，则依次处理它们，那么排在靠后的hrtimer实际上延迟就更大了。
++ oneshot-mode能够精确的根据leftmost hrtimer的到期时间来精确设置计数器，这样更加实时；并且根据此原理，一般多个hrtimer同时到期的情况应该比periodic-mode的少，则“依次处理”不会太长，这一点也比periodic-mode情况要好。&lt;/p&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>

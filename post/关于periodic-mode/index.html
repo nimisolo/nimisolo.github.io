@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>关于periodic-mode timer的问题</title>
+
+  
+  
+  <link rel="stylesheet" href="https://nimisolo.github.io/css/hugo-octopress.css">
+
+  
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://nimisolo.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Longp(Mike)">
+
+  
+  <meta name="generator" content="Hugo 0.18.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://nimisolo.github.io/">Are you kidding?</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Feb 5, 2017
+         - 3 minute read 
+        
+
+        
+    </p>
+    <h1 class="entry-title">
+        <a href="https://nimisolo.github.io/post/%E5%85%B3%E4%BA%8Eperiodic-mode/">关于periodic-mode timer的问题</a>
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          <p>今天和晓建讨论一个方案时，他说“即使定时器是periodic mode，当加入hrtimer时也有可能会去设置硬件计数器（tmict/tsc_deadline）的值”。
+咦？！和我以前的认识不一样啊，根据以前的掌握：periodic mode情况下新加hrtimer时不会设置硬件计数器了，及时设置计数器是oneshot mode的做法啊！
+于是重新翻了下相关代码，证明<strong><font color=red>晓建理解错了、我的观点是正确的</font></strong>。请看下面分析。</p>
+
+<p>我们以新加一个定时器的操作入手：<code>hrtimer_start --&gt; hrtimer_start_range_ns
+</code>，在后者中有这么一段：</p>
+
+<pre><code>	leftmost = enqueue_hrtimer(timer, new_base);
+	if (!leftmost)
+		goto unlock;
+
+	if (!hrtimer_is_hres_active(timer)) {
+		/*
+		 * Kick to reschedule the next tick to handle the new timer
+		 * on dynticks target.
+		 */
+		if (new_base-&gt;cpu_base-&gt;nohz_active)
+			wake_up_nohz_cpu(new_base-&gt;cpu_base-&gt;cpu);
+	} else {
+		hrtimer_reprogram(timer, new_base);
+	}
+</code></pre>
+
+<ol>
+<li>通过<code>enqueue_hrtimer</code>将（新添加的）hrtimer插入到当前的timerqueue（其实是一个rb-tree）中。如果该hrtimer是“将会最早到期”的，则它会放在rb-tree的最左端，即leftrmost为1；否则leftmost为0。</li>
+<li>如果不是最左端，则直接返回。这是因为：此函数是perdioc mode和oneshot mode公用的，如果此定时器将最早到期，oneshot mode会根据起到期时间重设硬件计数器。</li>
+<li>如果没有启动高精度定时器（<code>hrtimer_is_hres_active</code>返回false），则不会重设硬件计数器；否则（oneshot mode）就通过<code>hrtimer_reprogram</code>重设。</li>
+</ol>
+
+<p>现在需要弄清楚的就是：<code>hrtimer_is_hres_active</code>什么情况下返回true。</p>
+
+<pre><code>static inline int hrtimer_is_hres_active(struct hrtimer *timer)
+{
+	return timer-&gt;base-&gt;cpu_base-&gt;hres_active;
+}
+</code></pre>
+
+<p>实际上就是看<code>hres_active</code>是否为1。因此下面搜索下，看什么情况下会设置它为1。</p>
+
+<pre><code>static void hrtimer_switch_to_hres(void)
+{
+	struct hrtimer_cpu_base *base = this_cpu_ptr(&amp;hrtimer_bases);
+
+	if (tick_init_highres()) {
+		printk(KERN_WARNING &quot;Could not switch to high resolution &quot;
+				    &quot;mode on CPU %d\n&quot;, base-&gt;cpu);
+		return;
+	}
+	base-&gt;hres_active = 1;
+	......
+}
+</code></pre>
+
+<p>当<code>tick_init_highres</code>返回false是，才会设置<code>hres_active</code>为1。看名字，该函数的作用是初始化高精度定时器（即oneshot mode），深入该函数，可以发现：如果成功切换成oneshot，则会返回0。
+好，到这里其实我们已经弄清楚了：
+<font color=red>
++ 高精度highres其实是指onshot-mode。
++ periodic mode下，即使新加一个leftmost的hrtimer也不会重设硬件计数器。只有onshot mode下才会。
+</font></p>
+
+<p><strong>更进一步</strong>，当hrtimer到期之后，是如何被处理的？
+<strong>对于periodic-mode模式：</strong><code>tick_handle_periodic --&gt; tick_periodic --&gt; update_process_times --&gt; run_local_timers --&gt; hrtimer_run_queues --&gt; __hrtimer_run_queues</code>
+<strong>对于oneshot-mode模式：</strong><code>hrtimer_interrupt --&gt; __hrtimer_run_queues</code></p>
+
+<p>处理超时的hrtimer是最终都是在<strong><code>__hrtimer_run_queues</code></strong>函数中完成，<font color=red>它会（根据当前时间）遍历所有已经超时的hrtimer，然后处理它们</font>。</p>
+
+<p><strong>再进一步</strong>，为啥periodic-mode精度比oneshot-mode低低低？？
++ 因为periodic-mode下时钟中断触发时间是周期性的，也就是说在一个周期内到期的hrtimer只有在周期结束（时钟终端触发）时才能获得处理，显然实时性较差；并且如果一个周期内很多hrtimer到期，则依次处理它们，那么排在靠后的hrtimer实际上延迟就更大了。
++ oneshot-mode能够精确的根据leftmost hrtimer的到期时间来精确设置计数器，这样更加实时；并且根据此原理，一般多个hrtimer同时到期的情况应该比periodic-mode的少，则“依次处理”不会太长，这一点也比periodic-mode情况要好。</p>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Longp(Mike)</span></span>
+    
+    <time>Feb 5, 2017</time>
+    
+      <span class="categories">
+        Tags:
+        
+          <a class="category" href="https://nimisolo.github.io/tags/kernel">kernel</a>  <a class="category" href="https://nimisolo.github.io/tags/timer">timer</a>  
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      
+      
+      
+      
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2017 Longp(Mike) - <a href="https://nimisolo.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+</body>
+</html>
+
