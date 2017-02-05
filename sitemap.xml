@@ -2,36 +2,60 @@
 <urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9">
   
   <url>
+<<<<<<< HEAD
     <loc>https://nimisolo.github.io/post/dummy/</loc>
+=======
+    <loc>http://example.org/post/dummy/</loc>
+>>>>>>> 924adf5f49d2b95ae25bc9b403902744547e0985
     <lastmod>2017-02-05T14:57:41+08:00</lastmod>
   </url>
   
   <url>
+<<<<<<< HEAD
     <loc>https://nimisolo.github.io/tags/aaa/</loc>
+=======
+    <loc>http://example.org/tags/aaa/</loc>
+>>>>>>> 924adf5f49d2b95ae25bc9b403902744547e0985
     <lastmod>2017-02-05T14:57:41+08:00</lastmod>
     <priority>0</priority>
   </url>
   
   <url>
+<<<<<<< HEAD
     <loc>https://nimisolo.github.io/</loc>
+=======
+    <loc>http://example.org/</loc>
+>>>>>>> 924adf5f49d2b95ae25bc9b403902744547e0985
     <lastmod>2017-02-05T14:57:41+08:00</lastmod>
     <priority>0</priority>
   </url>
   
   <url>
+<<<<<<< HEAD
     <loc>https://nimisolo.github.io/tags/bbb/</loc>
+=======
+    <loc>http://example.org/tags/bbb/</loc>
+>>>>>>> 924adf5f49d2b95ae25bc9b403902744547e0985
     <lastmod>2017-02-05T14:57:41+08:00</lastmod>
     <priority>0</priority>
   </url>
   
   <url>
+<<<<<<< HEAD
     <loc>https://nimisolo.github.io/post/</loc>
+=======
+    <loc>http://example.org/post/</loc>
+>>>>>>> 924adf5f49d2b95ae25bc9b403902744547e0985
     <lastmod>2017-02-05T14:57:41+08:00</lastmod>
     <priority>0</priority>
   </url>
   
   <url>
+<<<<<<< HEAD
     <loc>https://nimisolo.github.io/tags/</loc>
+=======
+    <loc>http://example.org/tags/</loc>
+>>>>>>> 924adf5f49d2b95ae25bc9b403902744547e0985
     <priority>0</priority>
   </url>
   
