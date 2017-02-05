@@ -6,8 +6,59 @@
     <description>Recent content on Are you kidding?</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sun, 05 Feb 2017 15:54:39 +0800</lastBuildDate>
+    <lastBuildDate>Sun, 05 Feb 2017 16:45:06 +0800</lastBuildDate>
     <atom:link href="https://nimisolo.github.io/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>guest使用哪种timer</title>
+      <link>https://nimisolo.github.io/post/arm-host/guest%E4%BD%BF%E7%94%A8%E5%93%AA%E7%A7%8Dtimer/</link>
+      <pubDate>Sun, 05 Feb 2017 16:45:06 +0800</pubDate>
+      
+      <guid>https://nimisolo.github.io/post/arm-host/guest%E4%BD%BF%E7%94%A8%E5%93%AA%E7%A7%8Dtimer/</guid>
+      <description>&lt;p&gt;ARM Generic Timer支持好几种timer，此前听说ARM linux host使用pyhsical timer，而guest使用virtual timer。&lt;font color=red&gt;一直不清楚ARM linux中是怎么探测和设置它的，今晚看了下有所眉目了。&lt;/font&gt;&lt;/p&gt;
+
+&lt;p&gt;首先来看个全局变量：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;static enum ppi_nr arch_timer_uses_ppi = VIRT_PPI;
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;code&gt;arch_timer_uses_ppi&lt;/code&gt;表示使用的timer类型，默认是virtual timer。&lt;/p&gt;
+
+&lt;p&gt;在&lt;code&gt;arch_timer_init&lt;/code&gt;中根据情况会对此作出调整：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;	if (is_hyp_mode_available() || !arch_timer_ppi[VIRT_PPI]) {
+		bool has_ppi;
+
+		if (is_kernel_in_hyp_mode()) {
+			arch_timer_uses_ppi = HYP_PPI;
+			has_ppi = !!arch_timer_ppi[HYP_PPI];
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;可以看到，对于host来说，会调整成physical timer。&lt;/p&gt;
+
+&lt;p&gt;在&lt;code&gt;__arch_timer_setup&lt;/code&gt;中会对所使用的clocksource做设置：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;		switch (arch_timer_uses_ppi) {
+		case VIRT_PPI:
+			clk-&amp;gt;set_state_shutdown = arch_timer_shutdown_virt;
+			clk-&amp;gt;set_state_oneshot_stopped = arch_timer_shutdown_virt;
+			clk-&amp;gt;set_next_event = arch_timer_set_next_event_virt;
+			break;
+		case PHYS_SECURE_PPI:
+		case PHYS_NONSECURE_PPI:
+		case HYP_PPI:
+			clk-&amp;gt;set_state_shutdown = arch_timer_shutdown_phys;
+			clk-&amp;gt;set_state_oneshot_stopped = arch_timer_shutdown_phys;
+			clk-&amp;gt;set_next_event = arch_timer_set_next_event_phys;
+			break;
+		default:
+			BUG();
+		}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;针对不同的timer（physical或virtual），设置了不同的钩子处理函数。这样一来，以后对clock进行操作的时候就各走各的路了，从而区分开来了。&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>关于periodic-mode timer的问题</title>

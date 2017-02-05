@@ -16,7 +16,7 @@
   
 
   
-  <title>Are you kidding?</title>
+  <title>guest使用哪种timer</title>
 
   
   
@@ -35,7 +35,7 @@
   
   
 
-  <link href="https://nimisolo.github.io/index.xml" rel="alternate" type="application/rss+xml" title="Are you kidding?" />
+  
 
   <meta name="description" content="">
   <meta name="keywords" content="">
@@ -77,11 +77,9 @@
 
 
 <div id="main">
- <div id="content">
-  <div class="blog-index">
-    
-    
-    <article>
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
 
         
         
@@ -99,61 +97,83 @@
 </header>
 
 
-        
-          <p>ARM Generic Timer支持好几种timer，此前听说ARM linux host使用pyhsical timer，而guest使用virtual timer。一直不</p>
-
+        <div class="entry-content">
           
-              <footer>
-                  <a href="https://nimisolo.github.io/post/arm-host/guest%E4%BD%BF%E7%94%A8%E5%93%AA%E7%A7%8Dtimer/" rel="full-article">Read On &rarr;</a>
-              </footer>
           
-
-        
-
-    </article>
-    
-    <article>
-
-        
-        
-
-<header>
-    <p class="meta">Feb 5, 2017
-         - 3 minute read 
-        
-
-        
-    </p>
-    <h1 class="entry-title">
-        <a href="https://nimisolo.github.io/post/%E5%85%B3%E4%BA%8Eperiodic-mode/">关于periodic-mode timer的问题</a>
-    </h1>
-</header>
-
-
-        
-          <p>今天和晓建讨论一个方案时，他说“即使定时器是periodic mode，当加入hrtimer时也有可能会去设置硬件计数器（tmict/tsc_</p>
-
           
-              <footer>
-                  <a href="https://nimisolo.github.io/post/%E5%85%B3%E4%BA%8Eperiodic-mode/" rel="full-article">Read On &rarr;</a>
-              </footer>
-          
+          <p>ARM Generic Timer支持好几种timer，此前听说ARM linux host使用pyhsical timer，而guest使用virtual timer。<font color=red>一直不清楚ARM linux中是怎么探测和设置它的，今晚看了下有所眉目了。</font></p>
 
+<p>首先来看个全局变量：</p>
+
+<pre><code>static enum ppi_nr arch_timer_uses_ppi = VIRT_PPI;
+</code></pre>
+
+<p><code>arch_timer_uses_ppi</code>表示使用的timer类型，默认是virtual timer。</p>
+
+<p>在<code>arch_timer_init</code>中根据情况会对此作出调整：</p>
+
+<pre><code>	if (is_hyp_mode_available() || !arch_timer_ppi[VIRT_PPI]) {
+		bool has_ppi;
+
+		if (is_kernel_in_hyp_mode()) {
+			arch_timer_uses_ppi = HYP_PPI;
+			has_ppi = !!arch_timer_ppi[HYP_PPI];
+</code></pre>
+
+<p>可以看到，对于host来说，会调整成physical timer。</p>
+
+<p>在<code>__arch_timer_setup</code>中会对所使用的clocksource做设置：</p>
+
+<pre><code>		switch (arch_timer_uses_ppi) {
+		case VIRT_PPI:
+			clk-&gt;set_state_shutdown = arch_timer_shutdown_virt;
+			clk-&gt;set_state_oneshot_stopped = arch_timer_shutdown_virt;
+			clk-&gt;set_next_event = arch_timer_set_next_event_virt;
+			break;
+		case PHYS_SECURE_PPI:
+		case PHYS_NONSECURE_PPI:
+		case HYP_PPI:
+			clk-&gt;set_state_shutdown = arch_timer_shutdown_phys;
+			clk-&gt;set_state_oneshot_stopped = arch_timer_shutdown_phys;
+			clk-&gt;set_next_event = arch_timer_set_next_event_phys;
+			break;
+		default:
+			BUG();
+		}
+</code></pre>
+
+<p>针对不同的timer（physical或virtual），设置了不同的钩子处理函数。这样一来，以后对clock进行操作的时候就各走各的路了，从而区分开来了。</p>
+
+        </div>
         
 
-    </article>
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Longp(Mike)</span></span>
     
+    <time>Feb 5, 2017</time>
     
-    
+    </span>
+  </p>
 
-
-
+  
+  
 
   
 
-  </div>
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://nimisolo.github.io/post/%E5%85%B3%E4%BA%8Eperiodic-mode/" title="关于periodic-mode timer的问题">关于periodic-mode timer的问题</a>
+    
 
+    
+  </p>
   
+</footer>
+
+      </article>
+    </div>
+    
 
 <aside class="sidebar thirds">
   <section class="first odd">
@@ -196,8 +216,8 @@
   
 
 </aside>
-    
- </div>
+
+  </div>
 </div>
 
 <footer role="contentinfo">
@@ -210,4 +230,4 @@
 
 </body>
 </html>
-   
+
