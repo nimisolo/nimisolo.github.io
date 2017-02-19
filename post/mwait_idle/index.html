@@ -86,13 +86,13 @@
 
 <header>
     <p class="meta">Feb 19, 2017
-         - 4 minute read 
+         - 7 minute read 
         
 
         
     </p>
     <h1 class="entry-title">
-        <a href="https://nimisolo.github.io/post/mwait_idle/">Linux内核idle进程分析</a>
+         Linux内核idle进程分析 
     </h1>
 </header>
 
@@ -132,15 +132,54 @@
 <p>细想一下，此处busy loop的好处是啥？无非就是在条件满足的情况下不要将vcpu线程切换出去，否则来回切换势必使得vcpu线程被唤醒不够及时，导致虚拟机性能受影响。这样来说的话，我们在busy loop中调用HLT/MWAIT也能起到一样的效果：</p>
 
 <ul>
-<li><p>如果使用MWAIT，我们可以用MONITOR监控让busy loop结束的变量，这样当需要结束时MWAIT会被breaken，从而与此前流程一样。</p></li>
+<li><p>如果使用MWAIT，我们可以用MONITOR监控让busy loop结束的变量，这样当需要结束时MWAIT会被broken，从而与此前流程一样。</p></li>
 
-<li><p>如果使用HLT，则我们需要根据stop设置一个backend hrtimer，保证我们肯定能够从HLT中出来。（但是，这个方式肯定不如上述代码的实现，因为HLT的breaken事件中不包括内存监控，它没法及时监控到nr_running的变化，这可能会导致调度不及时）</p></li>
+<li><p>如果使用HLT，则我们需要根据stop设置一个backend hrtimer，保证我们肯定能够从HLT中出来。（但是，这个方式肯定不如上述代码的实现，因为HLT的broken事件中不包括内存监控，它没法及时监控到nr_running的变化，这可能会导致调度不及时）</p></li>
 </ul>
+
+<p><font color=red><strong>[更新]</strong>突然想到一个此处换做HLT/MWAIT的一个优势：在开启硬件超线程的host上，如果同一core上的一个硬件线程的vcpu1进行halt_poll_ns而另外个硬件线程上的vcpu2在运行业务，那么这种做法或许比社区的好，因为vcpu1 exit执行HLT/MWAIT指令后，该core的硬件资源此时能够完全给另一个硬件线程独占，该线程性能会因资源独占而变好。</font></p>
 
 <h3 id="cpu-cstates">CPU Cstates</h3>
 
-<p>Cstates是ACPI规范中引入的，具体的可以看acpi spec，下面内容摘自<a href="http://www.expreview.com/25426.html">Haswell芯光大道之六：C-States十种状态解析</a>
-<img src="https://nimisolo.github.io/intel-power-state.jpg" alt="" /></p>
+<p>Cstates是ACPI规范中引入的，具体的可以看acpi spec，下面内容摘自<a href="http://www.expreview.com/25426.html">Haswell芯光大道之六：C-States十种状态解析</a></p>
+
+<h4 id="三种常见cpu工作状态简介">三种常见CPU工作状态简介</h4>
+
+<p>常见的CPU工作状态包含S-States、C-States和P-States三种，其中<strong>S-States（Sleeping states）指系统睡眠状态</strong>，<strong>C-States（CPU Power states）指CPU电源状态</strong>，而<strong>P-States（CPU Performance states）则指CPU性能状态</strong>。当然除了这三种外，还有G-States（全局状态）和D-States（设备状态）。</p>
+
+<p>S-States很好理解，就是你手动点击“睡眠”，或者达到一定的待机时间（根据系统电源管理设置而定）进入睡眠状态，S0就是指正常运作。而C-States和P-States看起来也很类似，都会调节处理器的核心电压、电流以及频率，因此经常被混淆。其实他们的区别也是很明显的，不过我们首先要梳理一下上面这三种状态的关系。</p>
+
+<p><img src="https://nimisolo.github.io/intel-power-state.jpg" alt="" /></p>
+
+<p>S-States中的S0指非睡眠状态，包含了系统正常运作状态以及待机状态，这意味着只有在S0状态下，C-States才会存在。同样的，C0代表正常工作状态，而P-States正是处理器正常运作时的状态，所以P-States只存在于C0状态下。</p>
+
+<p>简单来说，P-States是根据系统的负载情况调节处理器核心电压和频率，处理器仍在运作当中；而C-States则是改变处理器各个部分的状态，包括核心、缓存、总线以及各种后来集成进来的模块，此时处理器应该是工作或待机状态。我们日常使用电脑的时候，系统就是频繁地在这些状态下切换，以达到提高续航和降低功耗的目的。</p>
+
+<h4 id="c-states各个状态介绍">C-States各个状态介绍</h4>
+
+<p>目前C-States有以下这11个状态：</p>
+
+<p><strong>C0</strong>：正常运行模式，我们正常操作电脑时均处于C0状态。</p>
+
+<p><strong>C1/C1E</strong>：挂起/待机状态，通过软件（一般发送HLT命令）停止处理器内部时钟。增强版的C1E支持降低倍频和电压。使用CPU-Z会观察到频率、电压下降，表示系统进入了这个状态，当外部总线传来请求时就会暂时离开C1/C1E状态（只需10纳秒），处理完后会恢复。这个状态仅对硬件延迟有要求，不过目前的硬件一般都没问题。</p>
+
+<p><strong>C2/C2E</strong>：和C1/C1E类似，但C2/C2E状态通过硬件进入，而且唤醒需要100纳秒以上。</p>
+
+<p><strong>C3</strong>：深度睡眠，内部时钟同样会被停止，总线频率会被锁定，多核心系统下缓存数据保留，并暂停写入操作，无法响应外部总线的重要请求。进入C3状态的前提是硬件支持并已进入C2模式。唤醒时间在50微秒左右。</p>
+
+<p><strong>C4</strong>：更深度睡眠，在C3状态的基础上通过将电压降至1.0V以下与减少L2缓存的数据存储以降低功耗。需要进入C3后才能进入C4，另外唤醒时间不超过1秒。</p>
+
+<p><strong>C4E</strong>：同样需要进入C4状态，并且L2缓存数据被减为零。唤醒时间至少需要200微秒。</p>
+
+<p><strong>C6</strong>：深度节能，处理器可实时清除L1缓存内所有数据，在保存处理器微架构状态下，关掉内核及L2缓存，芯片组会继续为I/O提供内存交换动作。对各个核心电源进行更智能的管理，电压降至C4的一半。不过唤醒时间要比C4长50%。</p>
+
+<p><strong>C7</strong>：更深度节能，在C6的基础上增加了清空部分或者全部L3缓存。</p>
+
+<p><strong>C8</strong>：L3缓存、系统助手（也就是以前北桥整合到CPU中的部分）和IO供电都被关闭，外部VR模块电压降至1.2V。</p>
+
+<p><strong>C9</strong>：VR模块电压接近0V。</p>
+
+<p><strong>C10</strong>：关闭VR模块。（不确定）</p>
 
 <h3 id="monitor-mwait指令">MONITOR/MWAIT指令</h3>
 
