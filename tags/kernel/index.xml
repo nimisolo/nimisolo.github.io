@@ -52,8 +52,9 @@
 
 &lt;h3 id=&#34;cpu-cstates&#34;&gt;CPU Cstates&lt;/h3&gt;
 
-&lt;p&gt;Cstates是ACPI规范中引入的，具体的可以看acpi spec，下面内容摘自&lt;a href=&#34;http://www.expreview.com/25426.html&#34;&gt;Haswell芯光大道之六：C-States十种状态解析&lt;/a&gt;
-&lt;img src=&#34;static/intel-power-state.jpg&#34; alt=&#34;&#34; /&gt;&lt;/p&gt;
+&lt;p&gt;Cstates是ACPI规范中引入的，具体的可以看acpi spec，下面内容摘自&lt;a href=&#34;http://www.expreview.com/25426.html&#34;&gt;Haswell芯光大道之六：C-States十种状态解析&lt;/a&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;intel-power-state.jpg&#34; alt=&#34;&#34; /&gt;&lt;/p&gt;
 
 &lt;h3 id=&#34;monitor-mwait指令&#34;&gt;MONITOR/MWAIT指令&lt;/h3&gt;
 
