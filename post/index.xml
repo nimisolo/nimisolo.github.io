@@ -6,8 +6,46 @@
     <description>Recent content in Posts on Are you kidding?</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Sun, 19 Feb 2017 08:42:58 +0800</lastBuildDate>
+    <lastBuildDate>Wed, 22 Mar 2017 20:38:22 +0800</lastBuildDate>
     <atom:link href="https://nimisolo.github.io/post/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Linux Concurrency Managed Workqueue分析</title>
+      <link>https://nimisolo.github.io/post/workqueue/</link>
+      <pubDate>Wed, 22 Mar 2017 20:38:22 +0800</pubDate>
+      
+      <guid>https://nimisolo.github.io/post/workqueue/</guid>
+      <description>
+
+&lt;h3 id=&#34;概述&#34;&gt;概述&lt;/h3&gt;
+
+&lt;h3 id=&#34;核心数据结构&#34;&gt;核心数据结构&lt;/h3&gt;
+
+&lt;h3 id=&#34;框架分析&#34;&gt;框架分析&lt;/h3&gt;
+
+&lt;h4 id=&#34;workqueue子系统初始化&#34;&gt;workqueue子系统初始化&lt;/h4&gt;
+
+&lt;h5 id=&#34;workqueue-init-early&#34;&gt;workqueue_init_early&lt;/h5&gt;
+
+&lt;p&gt;此函数对workqueue子系统做早期初始化。它会建立某些数据结构及创建系统的workquues，其他模块的早期初始化代码在这之后便可以queue/cancel work items了，但是这些work items只有在相关worker kthread建立（会在&lt;code&gt;workqueue_init&lt;/code&gt;中做）之后才能够得到运行。&lt;/p&gt;
+
+&lt;h3 id=&#34;font-color-red-关键问题-font&#34;&gt;&lt;font color=red&gt;关键问题&lt;/font&gt;&lt;/h3&gt;
+
+&lt;h4 id=&#34;worker的亲和性能改变吗&#34;&gt;worker的亲和性能改变吗&lt;/h4&gt;
+
+&lt;h4 id=&#34;worker何时唤醒-休眠&#34;&gt;worker何时唤醒/休眠&lt;/h4&gt;
+
+&lt;h4 id=&#34;rescuer作用及运行时间&#34;&gt;rescuer作用及运行时间&lt;/h4&gt;
+
+&lt;h4 id=&#34;timers的作用&#34;&gt;timers的作用&lt;/h4&gt;
+
+&lt;h4 id=&#34;worker何种情况下会扩建&#34;&gt;worker何种情况下会扩建&lt;/h4&gt;
+
+&lt;h4 id=&#34;worker何时销毁&#34;&gt;worker何时销毁&lt;/h4&gt;
+
+&lt;h4 id=&#34;work太多了能做负载均衡吗&#34;&gt;work太多了能做负载均衡吗&lt;/h4&gt;
+</description>
+    </item>
     
     <item>
       <title>Linux内核idle进程分析</title>
@@ -115,17 +153,69 @@ In addition, an external interrupt causes the processor to exit the implementati
 
 &lt;h4 id=&#34;会不会有安全问题&#34;&gt;会不会有安全问题&lt;/h4&gt;
 
-&lt;p&gt;&lt;font color=red&gt;&lt;strong&gt;问题：&lt;/strong&gt;&lt;/font&gt;虚拟化下，如果guest kernel中执行了MONITOR gva指令，此时会不会影响到host中正处于mwait状态的cpu？例如：无论是某个vcpu STORE了该gva、或者某个pcpu STORE了某hva（而此hva的数值与该gva相等），都将引起mwait BROKEN?&lt;/p&gt;
+&lt;p&gt;&lt;font color=red&gt;&lt;strong&gt;问题一：&lt;/strong&gt;&lt;/font&gt;虚拟化下，如果guest kernel中执行了MONITOR gva指令，此时会不会影响到host中正处于mwait状态的cpu？例如：无论是某个vcpu STORE了该gva、或者某个pcpu STORE了某hva（而此hva的数值与该gva相等），都将引起mwait BROKEN?&lt;/p&gt;
 
 &lt;p&gt;&lt;font color=blue&gt;&lt;strong&gt;解决：&lt;/strong&gt;&lt;/font&gt;&lt;/p&gt;
 
 &lt;ul&gt;
-&lt;li&gt;&lt;p&gt;intel SDM vol3 26.3.3 / 27.5.6 说，VMentry/VMexit时会将可能有影响的（或正在生效的?? may be in effect, 如何翻译更好??）所有“address-range monitoring”清除。（题外话：什么叫“可能有影响”？&lt;strong&gt;[a]&lt;/strong&gt;我觉得都是“可能有影响的”，因为该address-range是个virtual address，对于64位host+64位guest的线性地址空间大小是一样的，硬件上无法区分，所以应该是都会清除。&lt;strong&gt;[b]&lt;/strong&gt;但是这样的话又不对了，假如pcpu监控了hva1，然后它进入了guest，这时需要将hva1清除，当VMexit后并没有提到恢复对hva1的监控，那么此pcpu上后续STORE hva1不就不能被监控了吗？&lt;strong&gt;[c]&lt;/strong&gt;除非有种可能，address-range由至少二元组确定，即virtual address + cpu mode，但是这样的话SDM何不直接描述为“guest或non-root的address-range清除”即可？&lt;font color=red&gt;哎&amp;hellip;暂时不懂&lt;/font&gt;）&lt;/p&gt;&lt;/li&gt;
+&lt;li&gt;intel SDM vol3 26.3.3 / 27.5.6 说，VMentry/VMexit时会将可能有影响的（或正在生效的?? may be in effect, 如何翻译更好??）所有“address-range monitoring”清除。（题外话：什么叫“可能有影响”？&lt;strong&gt;[a]&lt;/strong&gt;我觉得都是“可能有影响的”，因为该address-range是个virtual address，对于64位host+64位guest的线性地址空间大小是一样的，硬件上无法区分，所以应该是都会清除。&lt;strong&gt;[b]&lt;/strong&gt;但是这样的话又不对了，假如pcpu监控了hva1，然后它进入了guest，这时需要将hva1清除，当VMexit后并没有提到恢复对hva1的监控，那么此pcpu上后续STORE hva1不就不能被监控了吗？&lt;strong&gt;[c]&lt;/strong&gt;除非有种可能，address-range由至少二元组确定，即virtual address + cpu mode，但是这样的话SDM何不直接描述为“guest或non-root的address-range清除”即可？&lt;font color=red&gt;哎&amp;hellip;暂时不懂&lt;/font&gt;）&lt;/li&gt;
+&lt;/ul&gt;
 
-&lt;li&gt;&lt;p&gt;intel SDM vol3 25.1.3 说，如果VM-execution control的“MONITOR exiting”为1，则MONITOR指令会导致VMexit。&lt;/p&gt;&lt;/li&gt;
+&lt;p&gt;&lt;font color=red&gt;&lt;strong&gt;[2017/03/22更新]&lt;/strong&gt; &lt;a href=&#34;http://marc.info/?l=kvm&amp;amp;m=149006091218214&amp;amp;w=4&#34;&gt;和KVM co-maintainer Radim做了些讨论&lt;/a&gt;，最终认为这是没有问题的，Intel spec vol2中对MWAIT有这样的描述：&lt;/p&gt;
+
+&lt;p&gt;If the preceding MONITOR instruction did not successfully arm an address range or if the MONITOR instruction has not been executed prior to executing MWAIT, then the processor will not enter the implementation-dependent-optimized state. Execution will resume at the instruction following the MWAIT.&lt;/p&gt;
+
+&lt;p&gt;也就是说，如果guest在monitor/mwait之间发生了vmexit，则monitor address-range会被clear掉，但再次vmentry时MWAIT行为和NOP一样（原因或许是：此时MWAIT执行时发现monitor address-range不存在，就当做&amp;rdquo; did not successfully arm an address range&amp;rdquo;，所以&amp;rdquo;resume at the instruction following the MWAIT&amp;rdquo;）&lt;/p&gt;
+
+&lt;p&gt;讨论相关记录：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt;&amp;gt; 2) According to the &amp;quot;Intel sdm vol3 ch26.3.3 &amp;amp; ch27.5.6&amp;quot;, I think MONITOR in
+&amp;gt;&amp;gt; guest mode can&#39;t work as perfect as in host sometimes.
+&amp;gt;&amp;gt; For example, a vcpu MONITOR a address and then MWAIT, if a external-intr(suppose
+&amp;gt;&amp;gt; this intr won&#39;t cause to inject any virtual events ) cause VMEXIT, the monitor
+&amp;gt;&amp;gt; address will be cleaned, so the MWAIT won&#39;t be waken up by a store operation to
+&amp;gt;&amp;gt; the monitored address any more.
+&amp;gt; 
+&amp;gt; It&#39;s not as perfect, but should not cause a bug (well, there is a
+&amp;gt; discussion with suspicious MWAIT behavior :]).
+&amp;gt; MWAIT on all Intels I tested would just behave as a nop if exit happened
+&amp;gt; between MONITOR and MWAIT, like it does if you skip the MONITOR (MWAIT
+&amp;gt; instruction desciption):
+&amp;gt; 
+&amp;gt;   If the preceding MONITOR instruction did not successfully arm an
+&amp;gt;   address range or if the MONITOR instruction has not been executed
+&amp;gt;   prior to executing MWAIT, then the processor will not enter the
+&amp;gt;   implementation-dependent-optimized state. Execution will resume at the
+&amp;gt;   instruction following the MWAIT.
+&amp;gt; 
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;&lt;/font&gt;&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;intel SDM vol3 25.1.3 说，如果VM-execution control的“MONITOR exiting”为1，则MONITOR指令会导致VMexit。&lt;/li&gt;
 &lt;/ul&gt;
 
 &lt;p&gt;在KVM中，在&lt;code&gt;setup_vmcs_config&lt;/code&gt;中“MONITOR exiting”是会强制为1的，所以vcpu只要执行该指令就会引起VMexit，退出处理&lt;code&gt;handle_monitor&lt;/code&gt;中直接跳过该指令、把它当做NOP来处理。&lt;/p&gt;
+
+&lt;p&gt;&lt;font color=red&gt;&lt;strong&gt;[2017/03/22更新]问题二：&lt;/strong&gt;&lt;/font&gt; Intel sdm vol3 ch25.3说在某些情况下，guest可正常执行MWAIT指令，正常包括进入各种deeper C-state？如果包括的话那么这就有蛋疼的事儿了：某些deeper sleep会clear缓存（L1、L2、L3都有可能），而vmx又没有能够限制guest max-cstates的方法，vcpu可以影响到其他pcpu cache，这太可怕了&amp;hellip;.&lt;/p&gt;
+
+&lt;p&gt;这个观点Radim很是认同，但我还需要做个实验，确定guest能够进入各种deeper sleep。&lt;/p&gt;
+
+&lt;p&gt;讨论相关记录：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;&amp;gt;&amp;gt; 1) As &amp;quot;Intel sdm vol3 ch25.3&amp;quot; says, MWAIT operates normally (I think includes
+&amp;gt;&amp;gt; entering deeper sleep) under certain conditions.
+&amp;gt;&amp;gt; Some deeper sleep modes(such as C4E/C6/C7) will clear the L1/L2/L3 cache.
+&amp;gt;&amp;gt; This is insecurity if we don&#39;t take other protective measures(such as limit the
+&amp;gt;&amp;gt; guest&#39;s max-cstate, it&#39;s fortunately that power subsystem isn&#39;t supported by
+&amp;gt;&amp;gt; QEMU, but we should be careful for some special-purpose in case). While HLT in
+&amp;gt;&amp;gt; guest mode can&#39;t cause hardware into sleep.
+&amp;gt; 
+&amp;gt; Good point.  I&#39;m not aware of any VMX capabilities to prevent deeper
+&amp;gt; C-states, so we&#39;d always hope that guests obey provided information.
+&amp;gt; 
+&lt;/code&gt;&lt;/pre&gt;
 
 &lt;h3 id=&#34;linux-idle进程&#34;&gt;Linux idle进程&lt;/h3&gt;
 

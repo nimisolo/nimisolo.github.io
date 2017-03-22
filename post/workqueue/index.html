@@ -1,0 +1,220 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xml:lang="en" lang="en-us">
+<head>
+  <link href="http://gmpg.org/xfn/11" rel="profile">
+  <meta http-equiv="content-type" content="text/html; charset=utf-8">
+
+  
+  <meta name="HandheldFriendly" content="True">
+  <meta name="MobileOptimized" content="320">
+  <meta name="viewport" content="width=device-width,minimum-scale=1,maximum-scale=1">
+
+  
+  
+  <link href="//fonts.googleapis.com/css?family=PT+Serif:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  <link href="//fonts.googleapis.com/css?family=PT+Sans:regular,italic,bold,bolditalic" rel="stylesheet" type="text/css">
+  
+
+  
+  <title>Linux Concurrency Managed Workqueue分析</title>
+
+  
+  
+  <link rel="stylesheet" href="https://nimisolo.github.io/css/hugo-octopress.css">
+
+  
+  
+
+  
+  <link rel="stylesheet" href="//maxcdn.bootstrapcdn.com/font-awesome/4.6.3/css/font-awesome.min.css">
+
+  
+  <link href="https://nimisolo.github.io/favicon.png" rel="icon">
+
+  
+  
+  
+
+  
+
+  <meta name="description" content="">
+  <meta name="keywords" content="">
+
+  <meta name="author" content="Longp(Mike)">
+
+  
+  <meta name="generator" content="Hugo 0.18.1" />
+
+  
+  
+
+</head>
+<body>
+
+
+<header role="banner"><hgroup>
+  
+  <h1><a href="https://nimisolo.github.io/">Are you kidding?</a></h1>
+    <h2></h2>
+</hgroup></header>
+
+
+<nav role="navigation">
+
+<ul class="main-navigation">
+  
+  
+</ul>
+
+
+<ul class="subscription">
+  
+
+</ul>
+
+
+</nav>
+
+
+<div id="main">
+  <div id="content">
+    <div>
+      <article class="hentry" role="article">
+
+        
+        
+
+<header>
+    <p class="meta">Mar 22, 2017
+         - 1 minute read 
+        
+
+        
+    </p>
+    <h1 class="entry-title">
+         Linux Concurrency Managed Workqueue分析 
+    </h1>
+</header>
+
+
+        <div class="entry-content">
+          
+          
+          
+          
+
+<h3 id="概述">概述</h3>
+
+<h3 id="核心数据结构">核心数据结构</h3>
+
+<h3 id="框架分析">框架分析</h3>
+
+<h4 id="workqueue子系统初始化">workqueue子系统初始化</h4>
+
+<h5 id="workqueue-init-early">workqueue_init_early</h5>
+
+<p>此函数对workqueue子系统做早期初始化。它会建立某些数据结构及创建系统的workquues，其他模块的早期初始化代码在这之后便可以queue/cancel work items了，但是这些work items只有在相关worker kthread建立（会在<code>workqueue_init</code>中做）之后才能够得到运行。</p>
+
+<h3 id="font-color-red-关键问题-font"><font color=red>关键问题</font></h3>
+
+<h4 id="worker的亲和性能改变吗">worker的亲和性能改变吗</h4>
+
+<h4 id="worker何时唤醒-休眠">worker何时唤醒/休眠</h4>
+
+<h4 id="rescuer作用及运行时间">rescuer作用及运行时间</h4>
+
+<h4 id="timers的作用">timers的作用</h4>
+
+<h4 id="worker何种情况下会扩建">worker何种情况下会扩建</h4>
+
+<h4 id="worker何时销毁">worker何时销毁</h4>
+
+<h4 id="work太多了能做负载均衡吗">work太多了能做负载均衡吗</h4>
+
+        </div>
+        
+
+<footer>
+  <p class="meta">
+    <span class="byline author vcard">Posted by <span class="fn">Longp(Mike)</span></span>
+    
+    <time>Mar 22, 2017</time>
+    
+    </span>
+  </p>
+
+  
+  
+
+  
+
+  <p class="meta">
+    
+        <a class="basic-alignment left" href="https://nimisolo.github.io/post/mwait_idle/" title="Linux内核idle进程分析">Linux内核idle进程分析</a>
+    
+
+    
+  </p>
+  
+</footer>
+
+      </article>
+    </div>
+    
+
+<aside class="sidebar thirds">
+  <section class="first odd">
+
+    
+
+    <p>
+      
+    </p>
+  </section>
+
+
+
+  
+  <ul class="sidebar-nav">
+    <li class="sidebar-nav-item">
+      
+      
+      
+      
+       
+      
+      
+      
+      
+      
+      
+
+    
+    
+    </li>
+  </ul>
+
+  
+
+  
+
+  
+  
+  
+
+</aside>
+
+  </div>
+</div>
+
+<footer role="contentinfo">
+  <p>Copyright &copy; 2017 Longp(Mike) - <a href="https://nimisolo.github.io/license/">License</a> -
+  <span class="credit">Powered by <a target="_blank" href="https://gohugo.io">Hugo</a> and <a target="_blank" href="https://github.com/parsiya/hugo-octopress/">Hugo-Octopress</a> theme.
+</p>
+
+</footer>
+
+
+</body>
+</html>
+
