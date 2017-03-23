@@ -41,7 +41,13 @@
   
   <url>
     <loc>https://nimisolo.github.io/tags/kernel/</loc>
-    <lastmod>2017-02-19T08:42:58+08:00</lastmod>
+    <lastmod>2017-03-22T20:38:22+08:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>https://nimisolo.github.io/tags/kthread/</loc>
+    <lastmod>2017-03-22T20:38:22+08:00</lastmod>
     <priority>0</priority>
   </url>
   
@@ -71,6 +77,12 @@
   <url>
     <loc>https://nimisolo.github.io/tags/timer/</loc>
     <lastmod>2017-02-05T15:54:39+08:00</lastmod>
+    <priority>0</priority>
+  </url>
+  
+  <url>
+    <loc>https://nimisolo.github.io/tags/workqueue/</loc>
+    <lastmod>2017-03-22T20:38:22+08:00</lastmod>
     <priority>0</priority>
   </url>
   

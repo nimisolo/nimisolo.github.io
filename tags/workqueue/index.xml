@@ -1,0 +1,67 @@
+<?xml version="1.0" encoding="utf-8" standalone="yes" ?>
+<rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
+  <channel>
+    <title>Workqueue on Are you kidding?</title>
+    <link>https://nimisolo.github.io/tags/workqueue/index.xml</link>
+    <description>Recent content in Workqueue on Are you kidding?</description>
+    <generator>Hugo -- gohugo.io</generator>
+    <language>zh-cn</language>
+    <atom:link href="https://nimisolo.github.io/tags/workqueue/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>Linux Concurrency Managed Workqueue分析</title>
+      <link>https://nimisolo.github.io/post/workqueue/</link>
+      <pubDate>Wed, 22 Mar 2017 20:38:22 +0800</pubDate>
+      
+      <guid>https://nimisolo.github.io/post/workqueue/</guid>
+      <description>
+
+&lt;h3 id=&#34;概述&#34;&gt;概述&lt;/h3&gt;
+
+&lt;h3 id=&#34;核心数据结构&#34;&gt;核心数据结构&lt;/h3&gt;
+
+&lt;h3 id=&#34;框架分析&#34;&gt;框架分析&lt;/h3&gt;
+
+&lt;h4 id=&#34;workqueue子系统初始化&#34;&gt;workqueue子系统初始化&lt;/h4&gt;
+
+&lt;h5 id=&#34;workqueue-init-early&#34;&gt;workqueue_init_early&lt;/h5&gt;
+
+&lt;p&gt;此函数对workqueue子系统做早期初始化。它会建立某些数据结构及创建系统的workquues，其他模块的早期初始化代码在这之后便可以queue/cancel work items了，但是这些work items只有在相关worker kthread建立（会在&lt;code&gt;workqueue_init&lt;/code&gt;中做）之后才能够得到运行。&lt;/p&gt;
+
+&lt;p&gt;此函数中最核心一步是&lt;font color=red&gt;为每个cpu初始化了两个普通worker pools（一个nice=0的、一个nice=-20的）&lt;/font&gt;，这些worker pool都存在per-cpu变量中：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;/* the per-cpu worker pools */
+static DEFINE_PER_CPU_SHARED_ALIGNED(struct worker_pool [NR_STD_WORKER_POOLS], cpu_worker_pools);
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;因为普通worker pool是per-cpu的，其cpumask也就只含有相应cpu，在创建work线程时会用它来指定线程的cpu亲和性，所以&lt;font color=red&gt;对于普通work poll来说，其work线程是只能在相应的cpu上运行，不能migrate&lt;/font&gt;&lt;/p&gt;
+
+&lt;h5 id=&#34;workqueue-init&#34;&gt;workqueue_init&lt;/h5&gt;
+
+&lt;p&gt;此函数是workqueue子系统初始化的第二步（也是最后一步）。
+它首先会为每个cpu的每个普通worker pool设置好其所在的node，存储在&lt;code&gt;pool-&amp;gt;node&lt;/code&gt;中；
+然后通过&lt;code&gt;create_worker&lt;/code&gt;为每个普通worker pool创建一个worker（包括一个工作线程），worker创建初始化完成后会通过&lt;code&gt;worker_enter_idle&lt;/code&gt;进入WORKER_IDLE状态；
+除了普通worker pool之外，系统中此时可能已有ubound worker pool（&lt;code&gt;workqueue_init_early&lt;/code&gt;之后其他子系统早期代码中可能会创建），此时也需要通过&lt;code&gt;create_worker&lt;/code&gt;为它们创建worker。&lt;/p&gt;
+
+&lt;h4 id=&#34;worker创建&#34;&gt;worker创建&lt;/h4&gt;
+
+&lt;h3 id=&#34;font-color-red-关键问题-font&#34;&gt;&lt;font color=red&gt;关键问题&lt;/font&gt;&lt;/h3&gt;
+
+&lt;h4 id=&#34;worker的亲和性能改变吗&#34;&gt;worker的亲和性能改变吗&lt;/h4&gt;
+
+&lt;h4 id=&#34;worker何时唤醒-休眠&#34;&gt;worker何时唤醒/休眠&lt;/h4&gt;
+
+&lt;h4 id=&#34;rescuer作用及运行时间&#34;&gt;rescuer作用及运行时间&lt;/h4&gt;
+
+&lt;h4 id=&#34;timers的作用&#34;&gt;timers的作用&lt;/h4&gt;
+
+&lt;h4 id=&#34;worker何种情况下会扩建&#34;&gt;worker何种情况下会扩建&lt;/h4&gt;
+
+&lt;h4 id=&#34;worker何时销毁&#34;&gt;worker何时销毁&lt;/h4&gt;
+
+&lt;h4 id=&#34;work太多了能做负载均衡吗&#34;&gt;work太多了能做负载均衡吗&lt;/h4&gt;
+</description>
+    </item>
+    
+  </channel>
+</rss>
