@@ -34,20 +34,115 @@
 static DEFINE_PER_CPU_SHARED_ALIGNED(struct worker_pool [NR_STD_WORKER_POOLS], cpu_worker_pools);
 &lt;/code&gt;&lt;/pre&gt;
 
+&lt;p&gt;&lt;font color=red&gt;实际上，无论是普通worker-pool还是unbound/ordered worker-pool，都有低优先级和高优先级两种。&lt;/font&gt;&lt;/p&gt;
+
 &lt;p&gt;因为普通worker pool是per-cpu的，其cpumask也就只含有相应cpu，在创建work线程时会用它来指定线程的cpu亲和性，所以&lt;font color=red&gt;对于普通work poll来说，其work线程是只能在相应的cpu上运行，不能migrate&lt;/font&gt;&lt;/p&gt;
 
 &lt;h5 id=&#34;workqueue-init&#34;&gt;workqueue_init&lt;/h5&gt;
 
-&lt;p&gt;此函数是workqueue子系统初始化的第二步（也是最后一步）。
-它首先会为每个cpu的每个普通worker pool设置好其所在的node，存储在&lt;code&gt;pool-&amp;gt;node&lt;/code&gt;中；
-然后通过&lt;code&gt;create_worker&lt;/code&gt;为每个普通worker pool创建一个worker（包括一个工作线程），worker创建初始化完成后会通过&lt;code&gt;worker_enter_idle&lt;/code&gt;进入WORKER_IDLE状态；
-除了普通worker pool之外，系统中此时可能已有ubound worker pool（&lt;code&gt;workqueue_init_early&lt;/code&gt;之后其他子系统早期代码中可能会创建），此时也需要通过&lt;code&gt;create_worker&lt;/code&gt;为它们创建worker。&lt;/p&gt;
+&lt;p&gt;此函数是workqueue子系统初始化的第二步（也是最后一步）。&lt;/p&gt;
+
+&lt;p&gt;它首先会为每个cpu的每个普通worker pool设置好其所在的node，存储在&lt;code&gt;pool-&amp;gt;node&lt;/code&gt;中；&lt;/p&gt;
+
+&lt;p&gt;然后通过&lt;code&gt;create_worker&lt;/code&gt;为每个普通worker pool创建一个worker（包括一个工作线程），worker创建初始化完成后会通过&lt;code&gt;worker_enter_idle&lt;/code&gt;进入WORKER_IDLE状态；&lt;/p&gt;
+
+&lt;p&gt;除了普通worker pool之外，系统中此时可能已有ubound worker pool（&lt;code&gt;workqueue_init_early&lt;/code&gt;之后其他子系统早期代码中可能会创建），此时也需要通过&lt;code&gt;create_worker&lt;/code&gt;为它们创建worker。&lt;/p&gt;
 
 &lt;h4 id=&#34;worker创建&#34;&gt;worker创建&lt;/h4&gt;
+
+&lt;h5 id=&#34;create-worker&#34;&gt;create_worker&lt;/h5&gt;
+
+&lt;p&gt;此函数用于为@pool创建一个worker。主要步骤如下：&lt;/p&gt;
+
+&lt;p&gt;1）通过&lt;code&gt;alloc_worker&lt;/code&gt;分配一个worker对象;&lt;/p&gt;
+
+&lt;p&gt;2）调用&lt;code&gt;kthread_create_on_node&lt;/code&gt;函数创建该worker的工作线程，工作线程的执行体是&lt;strong&gt;&lt;code&gt;worker_thread&lt;/code&gt;&lt;/strong&gt;;&lt;/p&gt;
+
+&lt;p&gt;&lt;font color=red&gt;&lt;strong&gt;注意：&lt;/strong&gt;&lt;/font&gt;&lt;code&gt;kthread_create_on_node&lt;/code&gt;会通过&lt;code&gt;kthreadd_task&lt;/code&gt;线程在指定node上（具体哪个cpu上不可测）创建一个内核线程。&lt;/p&gt;
+
+&lt;p&gt;3）设置工作线程的优先级（&lt;code&gt;set_user_nice&lt;/code&gt;）;&lt;/p&gt;
+
+&lt;p&gt;4）将工作线程绑定至指定的cpumask（&lt;code&gt;kthread_bind_mask&lt;/code&gt;）;&lt;/p&gt;
+
+&lt;p&gt;&lt;font color=red&gt;&lt;strong&gt;注意：&lt;/strong&gt;&lt;/font&gt;&lt;code&gt;kthread_bind_mask&lt;/code&gt;中会无条件将线程的allowed_cpumask设置为新的cpumask，但即使线程当前所处的cpu不在新的cpumask中也不会做迁移操作。&lt;/p&gt;
+
+&lt;p&gt;5）通过&lt;code&gt;worker_attach_to_pool&lt;/code&gt;函数将此worker与@pool关联起来，加入到@pool的workers链表中;&lt;/p&gt;
+
+&lt;p&gt;&lt;font color=red&gt;&lt;strong&gt;注意：&lt;/strong&gt;&lt;/font&gt;&lt;code&gt;worker_attach_to_pool&lt;/code&gt;中调用了&lt;code&gt;set_cpus_allowed_ptr&lt;/code&gt;函数，但是对于worker kthread来说调用它是没有实际意义的，因为它会检查allowed_cpumask是否与new_cpumask相等，如果相等的话什么也不干，&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;int set_cpus_allowed_ptr(struct task_struct *p, const struct cpumask *new_mask)
+{
+	return __set_cpus_allowed_ptr(p, new_mask, false);
+}
+
+static int __set_cpus_allowed_ptr(struct task_struct *p,
+				  const struct cpumask *new_mask, bool check)
+{
+	......
+	if (cpumask_equal(&amp;amp;p-&amp;gt;cpus_allowed, new_mask))
+	goto out;
+	......
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;但这里为什么需要调用呢？&lt;code&gt;worker_attach_to_pool&lt;/code&gt;在rescuer_thread也会调用。一个workqueue可以对应多个worker pool，但是只有一个rescuer线程，当其某个worker pool需要“急救”时，rescuer_thread通过·将自己“派到一线”去救援。&lt;/p&gt;
+
+&lt;p&gt;对于worker thread来说，只有等到被调度运行的时候才有机会被迁移到合适的cpu上运行（try_to_wake_up&amp;ndash;&amp;gt;select_task_rq）。&lt;/p&gt;
 
 &lt;h3 id=&#34;font-color-red-关键问题-font&#34;&gt;&lt;font color=red&gt;关键问题&lt;/font&gt;&lt;/h3&gt;
 
 &lt;h4 id=&#34;worker的亲和性能改变吗&#34;&gt;worker的亲和性能改变吗&lt;/h4&gt;
+
+&lt;p&gt;worker线程在创建中会通过&lt;code&gt;kthread_bind_mask&lt;/code&gt;设置它的allowed_cpumask，并且会设置PF_NO_SETAFFINITY标记。&lt;/p&gt;
+
+&lt;p&gt;改变亲和性的内核函数是&lt;code&gt;__set_cpus_allowed_ptr&lt;/code&gt;,&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;static int __set_cpus_allowed_ptr(struct task_struct *p,
+				  const struct cpumask *new_mask, bool check)
+{
+	......
+	if (check &amp;amp;&amp;amp; (p-&amp;gt;flags &amp;amp; PF_NO_SETAFFINITY)) {
+		ret = -EINVAL;
+		goto out;
+	}
+	......
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;如果&lt;code&gt;check&lt;/code&gt;为真，则不能设置带&lt;code&gt;PF_NO_SETAFFINITY&lt;/code&gt;标记的线程的亲和性。&lt;/p&gt;
+
+&lt;p&gt;&lt;font color=red&gt;特殊的，&lt;/font&gt;rescuer线程也是worker，它在运行过程中会调用&lt;code&gt;worker_attach_to_pool&lt;/code&gt;根据具体情况而调整自己的亲和性，而：&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;static void worker_attach_to_pool(struct worker *worker,
+				   struct worker_pool *pool)
+{
+	......
+	set_cpus_allowed_ptr(worker-&amp;gt;task, pool-&amp;gt;attrs-&amp;gt;cpumask);
+	......
+}
+
+int set_cpus_allowed_ptr(struct task_struct *p, const struct cpumask *new_mask)
+{
+	return __set_cpus_allowed_ptr(p, new_mask, false);
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;可以看到传入的check=false，即即使带PF_NO_SETAFFINITY标记也要修改，所以，&lt;font color=red&gt;rescuer线程在运行过程中会动态调整自己的亲和性，除此之外内核不会主动调整其他worker线程的亲和性&lt;/font&gt;。&lt;/p&gt;
+
+&lt;p&gt;用户态程序（例如taskset）可通过&lt;code&gt;sched_setaffinity&lt;/code&gt;来改变线程的亲和性，但是它会首先判断线程是否有PF_NO_SETAFFINITY标记，有的话则不能修改亲和性，&lt;/p&gt;
+
+&lt;pre&gt;&lt;code&gt;long sched_setaffinity(pid_t pid, const struct cpumask *in_mask)
+{
+	......
+	if (p-&amp;gt;flags &amp;amp; PF_NO_SETAFFINITY) {
+		retval = -EINVAL;
+		goto out_put_task;
+	}
+	......
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;p&gt;所以，&lt;font color=red&gt;用户态程序不能修改worker线程的亲和性。&lt;/font&gt;&lt;/p&gt;
 
 &lt;h4 id=&#34;worker何时唤醒-休眠&#34;&gt;worker何时唤醒/休眠&lt;/h4&gt;
 
