@@ -6,8 +6,58 @@
     <description>Recent content on Are you kidding?</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
-    <lastBuildDate>Wed, 22 Mar 2017 20:38:22 +0800</lastBuildDate>
+    <lastBuildDate>Thu, 22 Jun 2017 20:18:38 +0800</lastBuildDate>
     <atom:link href="https://nimisolo.github.io/index.xml" rel="self" type="application/rss+xml" />
+    
+    <item>
+      <title>手撕intel-iommu之DMA remapping（硬件篇）</title>
+      <link>https://nimisolo.github.io/post/vtd-dma-remapping/</link>
+      <pubDate>Thu, 22 Jun 2017 20:18:38 +0800</pubDate>
+      
+      <guid>https://nimisolo.github.io/post/vtd-dma-remapping/</guid>
+      <description>
+
+&lt;p&gt;由于KVM虚拟机的设备直通方案目前基本都采用vfio方式，而vfio下层依赖于平台的iommu功能，因此我决定研究下intel iommu。计划根据Intel vt-d spec和Linux内核相关源码（主要在&lt;code&gt;drviers/iommu/&lt;/code&gt;下面）进行学习。&lt;/p&gt;
+
+&lt;h2 id=&#34;dma-remapping&#34;&gt;DMA Remapping&lt;/h2&gt;
+
+&lt;h3 id=&#34;types-of-dma-requests&#34;&gt;Types of DMA requests&lt;/h3&gt;
+
+&lt;p&gt;Remapping硬件将来自于 集成在root-complex中 或 挂载在PCIE bus上的 设备的memory request分成两类：&lt;/p&gt;
+
+&lt;ul&gt;
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;Requests-without-PASID&lt;/strong&gt;：这是来自于endpoint devices的普通memory requests。它们一般指明了访问类型(read/write/atomics)、DMA目的地的地址与大小、源设备标识。&lt;/p&gt;&lt;/li&gt;
+
+&lt;li&gt;&lt;p&gt;&lt;strong&gt;Requests-with-PASID&lt;/strong&gt;：这是来自于支持virtual memory capabilities的endpoint devices的memory requests。它们除了指明上述普通信息外，还带有附加信息：目标PASID、扩展属性等&amp;hellip;&lt;/p&gt;&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;p&gt;（注：PASID全名Process Address Space ID，来源于PCIE中的概念）&lt;/p&gt;
+
+&lt;h3 id=&#34;domains-and-address-translation&#34;&gt;Domains and Address Translation&lt;/h3&gt;
+
+&lt;p&gt;Domain是一个抽象的定义，表示平台上一个隔离的、从host physical memory中分配的子集。对于虚拟化来说，软件可以将每个虚拟机看作是一个单独的domain。&lt;/p&gt;
+
+&lt;p&gt;Remapping硬件的作用是：在硬件进行进一步处理（例如：address decoding, snooping of processor caches, and/or forwarding to the memory controllers）之前，将memory request中的地址转换成host physical address。&lt;/p&gt;
+
+&lt;h3 id=&#34;mapping-devices-to-domains&#34;&gt;Mapping Devices to Domains&lt;/h3&gt;
+
+&lt;h4 id=&#34;source-identifier&#34;&gt;Source Identifier&lt;/h4&gt;
+
+&lt;p&gt;&lt;strong&gt;source-id&lt;/strong&gt;：用于标识I/O transaction的发起者。
+对于PCIE设备，其source-id位于PCI-Express transaction layer header中，由Bus/Device/Function组成。&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://nimisolo.github.io/iommu-source-id.jpg&#34; alt=&#34;&#34; /&gt;&lt;/p&gt;
+
+&lt;h4 id=&#34;root-entry-extended-root-entry&#34;&gt;Root-Entry &amp;amp; Extended-Root-Entry&lt;/h4&gt;
+
+&lt;p&gt;Root-table是devices mapping的最顶层结构。它的起始地址由&lt;strong&gt;Root Table Address Register&lt;/strong&gt;指定，共计4-KB大小，由256个root-entries组成。每个root-entry对应一个bus number，所以source-id中的bus number在mapping过程中会被当做root-table中的index来使用。
+我们首先来看看Root Table Address Register的详细描述：&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://nimisolo.github.io/iommu-rtar.jpg&#34; alt=&#34;&#34; /&gt;&lt;/p&gt;
+
+&lt;p&gt;&lt;img src=&#34;https://nimisolo.github.io/iommu-rtar-2.jpg&#34; alt=&#34;&#34; /&gt;&lt;/p&gt;
+</description>
+    </item>
     
     <item>
       <title>Linux Concurrency Managed Workqueue分析</title>
@@ -128,7 +178,7 @@ int set_cpus_allowed_ptr(struct task_struct *p, const struct cpumask *new_mask)
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;可以看到传入的check=false，即即使带PF_NO_SETAFFINITY标记也要修改，所以，&lt;font color=red&gt;rescuer线程在运行过程中会动态调整自己的亲和性，除此之外内核不会主动调整其他worker线程的亲和性&lt;/font&gt;。&lt;/p&gt;
+&lt;p&gt;可以看到传入的check=false，意味着即使带PF_NO_SETAFFINITY标记也要修改，所以，&lt;font color=red&gt;rescuer线程在运行过程中会动态调整自己的亲和性，除此之外内核不会主动调整其他worker线程的亲和性&lt;/font&gt;。&lt;/p&gt;
 
 &lt;p&gt;用户态程序（例如taskset）可通过&lt;code&gt;sched_setaffinity&lt;/code&gt;来改变线程的亲和性，但是它会首先判断线程是否有PF_NO_SETAFFINITY标记，有的话则不能修改亲和性，&lt;/p&gt;
 
@@ -147,15 +197,38 @@ int set_cpus_allowed_ptr(struct task_struct *p, const struct cpumask *new_mask)
 
 &lt;h4 id=&#34;worker何时唤醒-休眠&#34;&gt;worker何时唤醒/休眠&lt;/h4&gt;
 
-&lt;h4 id=&#34;rescuer作用及运行时间&#34;&gt;rescuer作用及运行时间&lt;/h4&gt;
+&lt;p&gt;首先说说“休眠”，也就是让worker进入&lt;code&gt;WORKER_IDLE&lt;/code&gt;状态。进入休眠状态的函数是&lt;code&gt;worker_enter_idle&lt;/code&gt;，根据其被调用地方，我们可以得到如下结论：&lt;/p&gt;
 
-&lt;h4 id=&#34;timers的作用&#34;&gt;timers的作用&lt;/h4&gt;
+&lt;ul&gt;
+&lt;li&gt;worker刚创建完成后会进入休眠状态，因此此时在&lt;code&gt;worker_thread&lt;/code&gt;中会进入sleep分支，然后进入休眠：&lt;/li&gt;
+&lt;/ul&gt;
+
+&lt;pre&gt;&lt;code&gt;static int worker_thread(void *__worker)
+{
+	......
+recheck:
+	/* no more worker necessary? */
+	if (!need_more_worker(pool))
+		goto sleep;
+	......
+sleep:
+	worker_enter_idle(worker);
+	__set_current_state(TASK_INTERRUPTIBLE);
+	spin_unlock_irq(&amp;amp;pool-&amp;gt;lock);
+	schedule();
+	goto woke_up;
+}
+&lt;/code&gt;&lt;/pre&gt;
+
+&lt;h4 id=&#34;rescuer作用及运行时间&#34;&gt;rescuer作用及运行时间&lt;/h4&gt;
 
 &lt;h4 id=&#34;worker何种情况下会扩建&#34;&gt;worker何种情况下会扩建&lt;/h4&gt;
 
 &lt;h4 id=&#34;worker何时销毁&#34;&gt;worker何时销毁&lt;/h4&gt;
 
-&lt;h4 id=&#34;work太多了能做负载均衡吗&#34;&gt;work太多了能做负载均衡吗&lt;/h4&gt;
+&lt;h4 id=&#34;work太多了如何并发处理&#34;&gt;work太多了如何并发处理&lt;/h4&gt;
+
+&lt;h4 id=&#34;timers的作用&#34;&gt;timers的作用&lt;/h4&gt;
 </description>
     </item>
     
@@ -590,7 +663,7 @@ static inline void mwait_idle_with_hints(unsigned long eax, unsigned long ecx)
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;当&lt;code&gt;tick_init_highres&lt;/code&gt;返回false是，才会设置&lt;code&gt;hres_active&lt;/code&gt;为1。看名字，该函数的作用是初始化高精度定时器（即oneshot mode），深入该函数，可以发现：如果成功切换成oneshot，则会返回0。
+&lt;p&gt;当&lt;code&gt;tick_init_highres&lt;/code&gt;返回false时，才会设置&lt;code&gt;hres_active&lt;/code&gt;为1。看名字，该函数的作用是初始化高精度定时器（即oneshot mode），深入该函数，可以发现：如果成功切换成oneshot，则会返回0。
 好，到这里其实我们已经弄清楚了：
 &lt;font color=red&gt;
 + 高精度highres其实是指onshot-mode。

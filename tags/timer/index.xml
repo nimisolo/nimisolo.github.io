@@ -67,7 +67,7 @@
 }
 &lt;/code&gt;&lt;/pre&gt;
 
-&lt;p&gt;当&lt;code&gt;tick_init_highres&lt;/code&gt;返回false是，才会设置&lt;code&gt;hres_active&lt;/code&gt;为1。看名字，该函数的作用是初始化高精度定时器（即oneshot mode），深入该函数，可以发现：如果成功切换成oneshot，则会返回0。
+&lt;p&gt;当&lt;code&gt;tick_init_highres&lt;/code&gt;返回false时，才会设置&lt;code&gt;hres_active&lt;/code&gt;为1。看名字，该函数的作用是初始化高精度定时器（即oneshot mode），深入该函数，可以发现：如果成功切换成oneshot，则会返回0。
 好，到这里其实我们已经弄清楚了：
 &lt;font color=red&gt;
 + 高精度highres其实是指onshot-mode。
