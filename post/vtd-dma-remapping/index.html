@@ -86,7 +86,7 @@
 
 <header>
     <p class="meta">Jun 22, 2017
-         - 2 minute read 
+         - 3 minute read 
         
 
         
@@ -105,9 +105,9 @@
 
 <p>由于KVM虚拟机的设备直通方案目前基本都采用vfio方式，而vfio下层依赖于平台的iommu功能，因此我决定研究下intel iommu。计划根据Intel vt-d spec和Linux内核相关源码（主要在<code>drviers/iommu/</code>下面）进行学习。</p>
 
-<h2 id="dma-remapping">DMA Remapping</h2>
+<h2 id="font-color-red-dma-remapping-font"><font color=red>DMA Remapping</font></h2>
 
-<h3 id="types-of-dma-requests">Types of DMA requests</h3>
+<h3 id="font-color-red-types-of-dma-requests-font"><font color=red>Types of DMA requests</font></h3>
 
 <p>Remapping硬件将来自于 集成在root-complex中 或 挂载在PCIE bus上的 设备的memory request分成两类：</p>
 
@@ -119,29 +119,64 @@
 
 <p>（注：PASID全名Process Address Space ID，来源于PCIE中的概念）</p>
 
-<h3 id="domains-and-address-translation">Domains and Address Translation</h3>
+<h3 id="font-color-red-domains-and-address-translation-font"><font color=red>Domains and Address Translation</font></h3>
 
 <p>Domain是一个抽象的定义，表示平台上一个隔离的、从host physical memory中分配的子集。对于虚拟化来说，软件可以将每个虚拟机看作是一个单独的domain。</p>
 
 <p>Remapping硬件的作用是：在硬件进行进一步处理（例如：address decoding, snooping of processor caches, and/or forwarding to the memory controllers）之前，将memory request中的地址转换成host physical address。</p>
 
-<h3 id="mapping-devices-to-domains">Mapping Devices to Domains</h3>
+<h3 id="font-color-red-mapping-devices-to-domains-font"><font color=red>Mapping Devices to Domains</font></h3>
 
-<h4 id="source-identifier">Source Identifier</h4>
+<h4 id="font-color-red-source-identifier-font"><font color=red>Source Identifier</font></h4>
 
 <p><strong>source-id</strong>：用于标识I/O transaction的发起者。
 对于PCIE设备，其source-id位于PCI-Express transaction layer header中，由Bus/Device/Function组成。</p>
 
-<p><img src="https://nimisolo.github.io/iommu-source-id.jpg" alt="" /></p>
+<p><img src="https://nimisolo.github.io/iommu-source-id.JPG" alt="" /></p>
 
-<h4 id="root-entry-extended-root-entry">Root-Entry &amp; Extended-Root-Entry</h4>
+<h4 id="font-color-red-root-entry-extended-root-entry-font"><font color=red>Root-Entry &amp; Extended-Root-Entry</font></h4>
 
-<p>Root-table是devices mapping的最顶层结构。它的起始地址由<strong>Root Table Address Register</strong>指定，共计4-KB大小，由256个root-entries组成。每个root-entry对应一个bus number，所以source-id中的bus number在mapping过程中会被当做root-table中的index来使用。
-我们首先来看看Root Table Address Register的详细描述：</p>
+<p>Root-table是devices mapping的最顶层结构。它的起始地址由<strong>Root Table Address Register</strong>指定，共计4-KB大小，由256个root-entries组成（可以算出：每个root-entry有16个字节空间）。每个root-entry对应一个bus number，所以source-id中的bus number在mapping过程中会被当做root-table中的index来使用。</p>
 
-<p><img src="https://nimisolo.github.io/iommu-rtar.jpg" alt="" /></p>
+<h5 id="font-color-red-root-table-address-register-font"><font color=red>Root Table Address Register</font></h5>
 
-<p><img src="https://nimisolo.github.io/iommu-rtar-2.jpg" alt="" /></p>
+<p>我们首先来看看Root Table Address Register的详细描述：</p>
+
+<p><img src="https://nimisolo.github.io/iommu-rtar.JPG" alt="" /></p>
+
+<p><img src="https://nimisolo.github.io/iommu-rtar-2.JPG" alt="" /></p>
+
+<p>可以看到：有两种形式的table，根据RTT bit进行控制。下面就依次来看这两种table。</p>
+
+<h5 id="font-color-red-root-table-entry-font"><font color=red>Root-table entry</font></h5>
+
+<p><img src="https://nimisolo.github.io/iommu-rte.JPG" alt="" /></p>
+
+<p><img src="https://nimisolo.github.io/iommu-rte-2.JPG" alt="" /></p>
+
+<h5 id="font-color-red-extended-root-table-entry-font"><font color=red>Extended Root-table entry</font></h5>
+
+<p>在支持Extended-Context-Support (ECS=1 in Extended Capability Register)的硬件上，如果RTADDR_REG的RTT=1，则它指向的是一个extended root-table。</p>
+
+<p><img src="https://nimisolo.github.io/iommu-extended-rte.JPG" alt="" /></p>
+
+<p><img src="https://nimisolo.github.io/iommu-extended-rte-2.JPG" alt="" /></p>
+
+<p>综上，又会涉及到两种context entry，下面依次来看。</p>
+
+<h5 id="font-color-red-regular-context-entry-font"><font color=red>regular Context-Entry</font></h5>
+
+<p>一个context-entry用于将一个bus上的一个特定I/O device映射到其所属的domain中，也就是指向该domain的地址翻译结构。</p>
+
+<p>source-id中的低8位（device#和function#）用来作为设备在context-table中的index使用。</p>
+
+<p><img src="https://nimisolo.github.io/iommu-map.JPG" alt="" /></p>
+
+<p><font color=blue>Context-entries只能支持requests-without-PASID</font>，它详细结构如下：</p>
+
+<p><img src="https://nimisolo.github.io/iommu-ce.JPG" alt="" /></p>
+
+<h5 id="font-color-red-extended-context-entry-font"><font color=red>Extended-Context-Entry</font></h5>
 
         </div>
         
