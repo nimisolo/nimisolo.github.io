@@ -2,10 +2,11 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Idle on Are you kidding?</title>
-    <link>https://nimisolo.github.io/tags/idle/index.xml</link>
+    <link>https://nimisolo.github.io/tags/idle/</link>
     <description>Recent content in Idle on Are you kidding?</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
+    <lastBuildDate>Sun, 19 Feb 2017 08:42:58 +0800</lastBuildDate>
     <atom:link href="https://nimisolo.github.io/tags/idle/index.xml" rel="self" type="application/rss+xml" />
     
     <item>

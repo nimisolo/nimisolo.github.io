@@ -2,10 +2,11 @@
 <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom">
   <channel>
     <title>Kthread on Are you kidding?</title>
-    <link>https://nimisolo.github.io/tags/kthread/index.xml</link>
+    <link>https://nimisolo.github.io/tags/kthread/</link>
     <description>Recent content in Kthread on Are you kidding?</description>
     <generator>Hugo -- gohugo.io</generator>
     <language>zh-cn</language>
+    <lastBuildDate>Wed, 22 Mar 2017 20:38:22 +0800</lastBuildDate>
     <atom:link href="https://nimisolo.github.io/tags/kthread/index.xml" rel="self" type="application/rss+xml" />
     
     <item>
